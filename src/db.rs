@@ -41,22 +41,22 @@ impl JiraDatabase {
     pub fn create_story(&self, story: Story, epic_id: u32) -> Result<u32> {
         // Similar to Epic
         let mut state = self.database.read_db()?;
-        let next_id = state.last_item_id + 1;
-
-        // Use entry API
-        state.stories.entry(next_id).or_insert(story);
-        state.last_item_id = next_id;
-        self.database.write_db(&state)?;
 
         // Add story to epic:
         // Guard the epic with entry API match
         match state.epics.entry(epic_id) {
             Entry::Occupied(mut occ) => {
-                let edit = occ.get_mut();
-                // Push new story id
-                edit.stories.push(next_id);
-                // Save as last_item
+                let next_id = state.last_item_id + 1;
+
+                // Create the story
+                state.stories.entry(next_id).or_insert(story);
                 state.last_item_id = next_id;
+
+                // Add story to epic
+                let edit = occ.get_mut();
+                edit.stories.push(next_id);
+                state.last_item_id = next_id;
+
                 // Save
                 self.database.write_db(&state)?;
                 Ok(next_id)
@@ -234,19 +234,6 @@ mod tests {
 
         let state = db.database.read_db().unwrap();
         assert_eq!(0, state.stories.len())
-    }
-
-    #[test]
-    fn create_story_should_not_create_story_if_invalid_epic_id(){
-        let db = JiraDatabase {
-            database: Box::new(MockDB::new()),
-        };
-        let story = Story::new("".to_owned(), "".to_owned());
-
-        let non_existent_epic_id = 999;
-
-        let result = db.create_story(story, non_existent_epic_id);
-        assert_eq!(result.is_err(), true);
     }
 
     #[test]
