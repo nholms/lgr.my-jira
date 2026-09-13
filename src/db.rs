@@ -46,6 +46,7 @@ impl JiraDatabase {
         // Use entry API
         state.stories.entry(next_id).or_insert(story);
         state.last_item_id = next_id;
+        self.database.write_db(&state)?;
 
         // Add story to epic:
         // Guard the epic with entry API match
@@ -221,6 +222,22 @@ mod tests {
 
     #[test]
     fn create_story_should_error_if_invalid_epic_id() {
+        let db = JiraDatabase {
+            database: Box::new(MockDB::new()),
+        };
+        let story = Story::new("".to_owned(), "".to_owned());
+
+        let non_existent_epic_id = 999;
+
+        let result = db.create_story(story, non_existent_epic_id);
+        assert_eq!(result.is_err(), true);
+
+        let state = db.database.read_db().unwrap();
+        assert_eq!(0, state.stories.len())
+    }
+
+    #[test]
+    fn create_story_should_not_create_story_if_invalid_epic_id(){
         let db = JiraDatabase {
             database: Box::new(MockDB::new()),
         };
