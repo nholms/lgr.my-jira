@@ -2,6 +2,7 @@ use ellipse::Ellipse;
 
 pub fn get_column_string(text: &str, width: usize) -> String {
     todo!() // use the truncate_ellipse function from the ellipse crate
+    Ellipse::truncate_ellipse(&self, len)
 }
 
 #[cfg(test)]
