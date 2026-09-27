@@ -220,10 +220,10 @@ impl Page for StoryDetail {
 
         println!(
             "{}|{}|{}|{}|",
-            get_column_string(&self.story_id.to_string(), 10),
-            get_column_string(story.name.as_str(), 10),
-            get_column_string(story.description.as_str(), 10),
-            get_column_string(&story.status.to_string(), 10)
+            get_column_string(&self.story_id.to_string(), 6),
+            get_column_string(story.name.as_str(), 14),
+            get_column_string(story.description.as_str(), 29),
+            get_column_string(&story.status.to_string(), 14)
         );
 
         println!();
