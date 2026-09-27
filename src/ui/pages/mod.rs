@@ -5,9 +5,8 @@ use anyhow::{anyhow, Result};
 use itertools::Itertools;
 
 use crate::db::JiraDatabase;
-use crate::models::Action;
-use crate::models::Epic;
 use crate::models::Story;
+use crate::models::{Action, Epic};
 
 mod page_helpers;
 use page_helpers::*;
@@ -97,7 +96,6 @@ impl Page for EpicDetail {
         println!("------------------------------ EPIC ------------------------------");
         println!("  id  |     name     |         description         |    status    ");
 
-        // VERIFY! - Left aligned at the indicated positions
         println!(
             "{}|{}|{}|{}",
             get_column_string(&id.to_string(), 6),
@@ -117,7 +115,6 @@ impl Page for EpicDetail {
             .sorted_by(|a, b| Ord::cmp(a.0, b.0))
             .collect();
 
-        // VERIFY! - Left aligned at the indicated positions
         for story in stories {
             println!(
                 "{}|{}|{}",
@@ -141,27 +138,37 @@ impl Page for EpicDetail {
             return Ok(None);
         }
 
-        // Not sure what the trigger is on input... as event? as form input?
-        // VERIFY! - Collecting as if input was form input, should work for both cases
         let spl: Vec<&str> = input.split(' ').collect();
         if let Some(str_first) = spl.first() {
             match *str_first {
                 "p" => {
-                    // TODO! - Bounds check (What happens here?)... would prefer a wrap
-                    return Ok(Some(Action::NavigateToEpicDetail { epic_id: (self.epic_id - 1) }));
+                    return Ok(Some(Action::NavigateToEpicDetail {
+                        epic_id: (self.epic_id - 1),
+                    }));
                 }
                 "u" => {
-                    return Ok(Some(Action::UpdateEpicStatus { epic_id: self.epic_id }));
+                    return Ok(Some(Action::UpdateEpicStatus {
+                        epic_id: self.epic_id,
+                    }));
                 }
                 "d" => {
-                    return Ok(Some(Action::DeleteEpic { epic_id: self.epic_id }));
+                    return Ok(Some(Action::DeleteEpic {
+                        epic_id: self.epic_id,
+                    }));
                 }
                 "c" => {
-                    return Ok(Some(Action::CreateStory { epic_id: self.epic_id }));
+                    return Ok(Some(Action::CreateStory {
+                        epic_id: self.epic_id,
+                    }));
                 }
                 // Forward match for STORY id
                 _opt => match _opt.parse::<u32>() {
-                    Ok(parsed_id) => return Ok(Some(Action::NavigateToStoryDetail { epic_id: self.epic_id, story_id: parsed_id })),
+                    Ok(parsed_id) => {
+                        return Ok(Some(Action::NavigateToStoryDetail {
+                            epic_id: self.epic_id,
+                            story_id: parsed_id,
+                        }))
+                    }
                     _ => {
                         return Ok(None);
                     }
@@ -190,7 +197,13 @@ impl Page for StoryDetail {
         println!("------------------------------ STORY ------------------------------");
         println!("  id  |     name     |         description         |    status    ");
 
-        // TODO: print out story details using get_column_string()
+        println!(
+            "{}|{}|{}|{}|",
+            get_column_string(&self.story_id.to_string(), 10),
+            get_column_string(story.name.as_str(), 10),
+            get_column_string(story.description.as_str(), 10),
+            get_column_string(&story.status.to_string(), 10)
+        );
 
         println!();
         println!();
@@ -201,7 +214,38 @@ impl Page for StoryDetail {
     }
 
     fn handle_input(&self, input: &str) -> Result<Option<Action>> {
-        todo!() // match against the user input and return the corresponding action. If the user input was invalid return None.
+        // No input
+        if input.is_empty() {
+            return Ok(None);
+        }
+
+        let spl: Vec<&str> = input.split(' ').collect();
+        if let Some(str_first) = spl.first() {
+            match *str_first {
+                "p" => {
+                    return Ok(Some(Action::NavigateToStoryDetail {
+                        epic_id: self.epic_id,
+                        story_id: (self.story_id - 1),
+                    }));
+                }
+                "u" => {
+                    return Ok(Some(Action::UpdateStoryStatus {
+                        story_id: self.story_id,
+                    }));
+                }
+                "d" => {
+                    return Ok(Some(Action::DeleteStory {
+                        epic_id: self.epic_id,
+                        story_id: self.story_id,
+                    }));
+                }
+                _ => {
+                    return Ok(None);
+                }
+            }
+        }
+
+        Err(anyhow!("Failed to handle input:\n{}", input))
     }
 }
 
