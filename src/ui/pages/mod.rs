@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use anyhow::{ anyhow, Result };
+use anyhow::{anyhow, Result};
 use itertools::Itertools;
 
 use crate::db::JiraDatabase;
 use crate::models::Action;
 use crate::models::Epic;
+use crate::models::Story;
 
 mod page_helpers;
 use page_helpers::*;
@@ -54,8 +55,8 @@ impl Page for HomePage {
             return Ok(None);
         }
 
-        // Not sure what the trigger is on input...
-        // VERIFY! - Collecting as if input was an input field, should work for both cases
+        // Not sure what the trigger is on input... as event? as form input?
+        // VERIFY! - Collecting as if input was form input, should work for both cases
         let spl: Vec<&str> = input.split(' ').collect();
         if let Some(str_first) = spl.first() {
             match *str_first {
@@ -67,9 +68,7 @@ impl Page for HomePage {
                 }
                 // Forward match for epic id
                 _opt => match _opt.parse::<u32>() {
-                    Ok(n) => {
-                        return Ok(Some(Action::NavigateToEpicDetail { epic_id: n }))
-                    }
+                    Ok(n) => return Ok(Some(Action::NavigateToEpicDetail { epic_id: n })),
                     _ => {
                         return Ok(None);
                     }
@@ -88,25 +87,45 @@ pub struct EpicDetail {
 
 impl Page for EpicDetail {
     fn draw_page(&self) -> Result<()> {
+        let id = self.epic_id;
         let db_state = self.db.read_db()?;
         let epic = db_state
             .epics
-            .get(&self.epic_id)
+            .get(&id)
             .ok_or_else(|| anyhow!("could not find epic!"))?;
 
         println!("------------------------------ EPIC ------------------------------");
         println!("  id  |     name     |         description         |    status    ");
 
-        // TODO: print out epic details using get_column_string()
+        // VERIFY! - Left aligned at the indicated positions
+        println!(
+            "{}|{}|{}|{}",
+            get_column_string(&id.to_string(), 6),
+            get_column_string(&epic.name, 14),
+            get_column_string(&epic.description, 29),
+            get_column_string(&epic.status.to_string(), 14)
+        );
 
         println!();
 
         println!("---------------------------- STORIES ----------------------------");
         println!("     id     |               name               |      status      ");
 
-        let stories = &db_state.stories;
+        let stories: Vec<(&u32, &Story)> = db_state
+            .stories
+            .iter()
+            .sorted_by(|a, b| Ord::cmp(a.0, b.0))
+            .collect();
 
-        // TODO: print out stories using get_column_string(). also make sure the stories are sorted by id
+        // VERIFY! - Left aligned at the indicated positions
+        for story in stories {
+            println!(
+                "{}|{}|{}",
+                get_column_string(&story.0.to_string(), 12),
+                get_column_string(&story.1.name, 34),
+                get_column_string(&story.1.description, 18),
+            );
+        }
 
         println!();
         println!();
@@ -117,7 +136,40 @@ impl Page for EpicDetail {
     }
 
     fn handle_input(&self, input: &str) -> Result<Option<Action>> {
-        todo!() // match against the user input and return the corresponding action. If the user input was invalid return None.
+        // No input
+        if input.is_empty() {
+            return Ok(None);
+        }
+
+        // Not sure what the trigger is on input... as event? as form input?
+        // VERIFY! - Collecting as if input was form input, should work for both cases
+        let spl: Vec<&str> = input.split(' ').collect();
+        if let Some(str_first) = spl.first() {
+            match *str_first {
+                "p" => {
+                    // TODO! - Bounds check (What happens here?)... would prefer a wrap
+                    return Ok(Some(Action::NavigateToEpicDetail { epic_id: (self.epic_id - 1) }));
+                }
+                "u" => {
+                    return Ok(Some(Action::UpdateEpicStatus { epic_id: self.epic_id }));
+                }
+                "d" => {
+                    return Ok(Some(Action::DeleteEpic { epic_id: self.epic_id }));
+                }
+                "c" => {
+                    return Ok(Some(Action::CreateStory { epic_id: self.epic_id }));
+                }
+                // Forward match for STORY id
+                _opt => match _opt.parse::<u32>() {
+                    Ok(parsed_id) => return Ok(Some(Action::NavigateToStoryDetail { epic_id: self.epic_id, story_id: parsed_id })),
+                    _ => {
+                        return Ok(None);
+                    }
+                },
+            }
+        }
+
+        Err(anyhow!("Failed to handle input:\n{}", input))
     }
 }
 
