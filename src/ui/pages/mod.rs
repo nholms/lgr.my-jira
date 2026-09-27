@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use anyhow::anyhow;
-use anyhow::Result;
+use anyhow::{ anyhow, Result };
 use itertools::Itertools;
 
 use crate::db::JiraDatabase;
@@ -25,13 +24,13 @@ impl Page for HomePage {
         println!("----------------------------- EPICS -----------------------------");
         println!("     id     |               name               |      status      ");
 
-        // TODO: print out epics using get_column_string(). also make sure the epics are sorted by id
         if let Ok(state) = self.db.read_db() {
             let _ = state
                 .epics
                 .iter()
                 .sorted_by(|a, b| Ord::cmp(a.0, b.0))
                 .map(|x| {
+                    // VERIFY! - Left aligned at the indicated positions
                     println!(
                         "{}|{}|{}",
                         get_column_string(&x.0.to_string(), 12),
@@ -50,7 +49,35 @@ impl Page for HomePage {
     }
 
     fn handle_input(&self, input: &str) -> Result<Option<Action>> {
-        todo!() // match against the user input and return the corresponding action. If the user input was invalid return None.
+        // No input
+        if input.is_empty() {
+            return Ok(None);
+        }
+
+        // Not sure what the trigger is on input...
+        // VERIFY! - Collecting as if input was an input field, should work for both cases
+        let spl: Vec<&str> = input.split(' ').collect();
+        if let Some(str_first) = spl.first() {
+            match *str_first {
+                "q" => {
+                    return Ok(Some(Action::Exit));
+                }
+                "c" => {
+                    return Ok(Some(Action::CreateEpic));
+                }
+                // Forward match for epic id
+                _opt => match _opt.parse::<u32>() {
+                    Ok(n) => {
+                        return Ok(Some(Action::NavigateToEpicDetail { epic_id: n }))
+                    }
+                    _ => {
+                        return Ok(None);
+                    }
+                },
+            }
+        }
+
+        Err(anyhow!("Failed to handle input:\n{}", input))
     }
 }
 
