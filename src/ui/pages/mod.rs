@@ -19,6 +19,7 @@ pub trait Page {
 pub struct HomePage {
     pub db: Rc<JiraDatabase>,
 }
+
 impl Page for HomePage {
     fn draw_page(&self) -> Result<()> {
         println!("----------------------------- EPICS -----------------------------");
@@ -30,7 +31,7 @@ impl Page for HomePage {
                 .iter()
                 .sorted_by(|a, b| Ord::cmp(a.0, b.0))
                 .map(|x| {
-                    // VERIFY! - Left aligned at the indicated positions
+                    // VERIFY - Left aligned at the indicated positions?
                     println!(
                         "{}|{}|{}",
                         get_column_string(&x.0.to_string(), 12),
@@ -67,7 +68,22 @@ impl Page for HomePage {
                 }
                 // Forward match for epic id
                 _opt => match _opt.parse::<u32>() {
-                    Ok(n) => return Ok(Some(Action::NavigateToEpicDetail { epic_id: n })),
+                    Ok(n) => {
+                        // IMPROVE - Move this to a higher abstraction?
+                        if let Ok(state) = self.db.read_db() {
+                            // Is find the idiomatic way?
+                            if let Some(_) = state.epics.iter().map(|x| x.0).find(|x| **x == n) {
+                                return Ok(Some(Action::NavigateToEpicDetail { epic_id: n }));
+                            } else {
+                                // Invalid epic id
+                                return Ok(None);
+                            }
+                        } else {
+                            // Failed to access db
+                            return Err(anyhow!("Could not read the database..."));
+                        };
+                    }
+
                     _ => {
                         return Ok(None);
                     }
@@ -142,9 +158,7 @@ impl Page for EpicDetail {
         if let Some(str_first) = spl.first() {
             match *str_first {
                 "p" => {
-                    return Ok(Some(Action::NavigateToEpicDetail {
-                        epic_id: (self.epic_id - 1),
-                    }));
+                    return Ok(Some(Action::NavigateToPreviousPage));
                 }
                 "u" => {
                     return Ok(Some(Action::UpdateEpicStatus {
@@ -163,11 +177,18 @@ impl Page for EpicDetail {
                 }
                 // Forward match for STORY id
                 _opt => match _opt.parse::<u32>() {
-                    Ok(parsed_id) => {
-                        return Ok(Some(Action::NavigateToStoryDetail {
-                            epic_id: self.epic_id,
-                            story_id: parsed_id,
-                        }))
+                    Ok(story_id) => {
+                        if let Ok(state) = self.db.read_db() {
+                            if let Some(_) = state.stories.iter().map(|x| x.0).find(|x| **x == story_id) {
+                                return Ok(Some(Action::NavigateToStoryDetail { epic_id: self.epic_id, story_id}));
+                            } else {
+                                // Invalid epic id
+                                return Ok(None);
+                            }
+                        } else {
+                            // Failed to access db
+                            return Err(anyhow!("Could not read the database..."));
+                        };
                     }
                     _ => {
                         return Ok(None);
@@ -223,10 +244,7 @@ impl Page for StoryDetail {
         if let Some(str_first) = spl.first() {
             match *str_first {
                 "p" => {
-                    return Ok(Some(Action::NavigateToStoryDetail {
-                        epic_id: self.epic_id,
-                        story_id: (self.story_id - 1),
-                    }));
+                    return Ok(Some(Action::NavigateToPreviousPage));
                 }
                 "u" => {
                     return Ok(Some(Action::UpdateStoryStatus {
