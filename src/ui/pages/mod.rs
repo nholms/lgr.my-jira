@@ -56,7 +56,7 @@ impl Page for HomePage {
         }
 
         // Not sure what the trigger is on input... as event? as form input?
-        // VERIFY! - Collecting as if input was form input, should work for both cases
+        // VERIFY - Collecting as if input was form input, should work for both cases
         let spl: Vec<&str> = input.split(' ').collect();
         if let Some(str_first) = spl.first() {
             match *str_first {
@@ -68,12 +68,11 @@ impl Page for HomePage {
                 }
                 // Forward match for epic id
                 _opt => match _opt.parse::<u32>() {
-                    Ok(n) => {
+                    Ok(epic_id) => {
                         // IMPROVE - Move this to a higher abstraction?
                         if let Ok(state) = self.db.read_db() {
-                            // Is find the idiomatic way?
-                            if let Some(_) = state.epics.iter().map(|x| x.0).find(|x| **x == n) {
-                                return Ok(Some(Action::NavigateToEpicDetail { epic_id: n }));
+                            if state.epics.contains_key(&epic_id) {
+                                return Ok(Some(Action::NavigateToEpicDetail { epic_id }));
                             } else {
                                 // Invalid epic id
                                 return Ok(None);
@@ -179,7 +178,7 @@ impl Page for EpicDetail {
                 _opt => match _opt.parse::<u32>() {
                     Ok(story_id) => {
                         if let Ok(state) = self.db.read_db() {
-                            if let Some(_) = state.stories.iter().map(|x| x.0).find(|x| **x == story_id) {
+                            if state.stories.contains_key(&story_id) {
                                 return Ok(Some(Action::NavigateToStoryDetail { epic_id: self.epic_id, story_id}));
                             } else {
                                 // Invalid epic id
