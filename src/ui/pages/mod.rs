@@ -67,7 +67,7 @@ impl Page for HomePage {
                     return Ok(Some(Action::CreateEpic));
                 }
                 // Forward match for epic id
-                _opt => match _opt.parse::<u32>() {
+                opt => match opt.parse::<u32>() {
                     Ok(epic_id) => {
                         // IMPROVE - Move this to a higher abstraction?
                         if let Ok(state) = self.db.read_db() {
@@ -175,7 +175,7 @@ impl Page for EpicDetail {
                     }));
                 }
                 // Forward match for STORY id
-                _opt => match _opt.parse::<u32>() {
+                opt => match opt.parse::<u32>() {
                     Ok(story_id) => {
                         if let Ok(state) = self.db.read_db() {
                             if state.stories.contains_key(&story_id) {
