@@ -54,6 +54,15 @@ impl Epic {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct EpicId(u32);
+
+impl Display for EpicId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct Story {
     pub name: String,
@@ -71,9 +80,12 @@ impl Story {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct StoryId(u32);
+
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct DBState {
     pub last_item_id: u32,
-    pub epics: HashMap<u32, Epic>,
-    pub stories: HashMap<u32, Story>
+    pub epics: HashMap<EpicId, Epic>,
+    pub stories: HashMap<StoryId, Story>
 }
