@@ -5,8 +5,7 @@ use anyhow::{anyhow, Result};
 use itertools::Itertools;
 
 use crate::db::JiraDatabase;
-use crate::models::Story;
-use crate::models::{Action, Epic};
+use crate::models::{Action, Epic, EpicId, Story, StoryId};
 
 mod page_helpers;
 use page_helpers::*;
@@ -29,14 +28,13 @@ impl Page for HomePage {
             let _ = state
                 .epics
                 .iter()
-                .sorted_by(|a, b| Ord::cmp(a.0, b.0))
-                .map(|x| {
-                    // VERIFY - Left aligned at the indicated positions?
+                .sorted_by_key(|(id, _)| *id) // <- itertools
+                .map(|(id, epic)| {
                     println!(
                         "{}|{}|{}",
-                        get_column_string(&x.0.to_string(), 12),
-                        get_column_string(&x.1.name, 34),
-                        get_column_string(&x.1.status.to_string(), 18)
+                        get_column_string(&id.to_string(), 12),
+                        get_column_string(&epic.name, 34),
+                        get_column_string(&epic.status.to_string(), 18)
                     );
                 });
         };
@@ -55,8 +53,6 @@ impl Page for HomePage {
             return Ok(None);
         }
 
-        // Not sure what the trigger is on input... as event? as form input?
-        // VERIFY - Collecting as if input was form input, should work for both cases
         let spl: Vec<&str> = input.split(' ').collect();
         if let Some(str_first) = spl.first() {
             match *str_first {
@@ -68,11 +64,12 @@ impl Page for HomePage {
                 }
                 // Forward match for epic id
                 opt => match opt.parse::<u32>() {
-                    Ok(epic_id) => {
-                        // IMPROVE - Move this to a higher abstraction?
+                    Ok(input_id) => {
                         if let Ok(state) = self.db.read_db() {
-                            if state.epics.contains_key(&epic_id) {
-                                return Ok(Some(Action::NavigateToEpicDetail { epic_id }));
+                            if state.epics.contains_key(&EpicId(input_id)) {
+                                return Ok(Some(Action::NavigateToEpicDetail {
+                                    epic_id: EpicId(input_id),
+                                }));
                             } else {
                                 // Invalid epic id
                                 return Ok(None);
@@ -95,17 +92,16 @@ impl Page for HomePage {
 }
 
 pub struct EpicDetail {
-    pub epic_id: u32,
+    pub epic_id: EpicId,
     pub db: Rc<JiraDatabase>,
 }
 
 impl Page for EpicDetail {
     fn draw_page(&self) -> Result<()> {
-        let id = self.epic_id;
         let db_state = self.db.read_db()?;
         let epic = db_state
             .epics
-            .get(&id)
+            .get(&self.epic_id)
             .ok_or_else(|| anyhow!("could not find epic!"))?;
 
         println!("------------------------------ EPIC ------------------------------");
@@ -113,7 +109,7 @@ impl Page for EpicDetail {
 
         println!(
             "{}|{}|{}|{}",
-            get_column_string(&id.to_string(), 6),
+            get_column_string(&self.epic_id.to_string(), 6),
             get_column_string(&epic.name, 14),
             get_column_string(&epic.description, 29),
             get_column_string(&epic.status.to_string(), 14)
@@ -124,20 +120,18 @@ impl Page for EpicDetail {
         println!("---------------------------- STORIES ----------------------------");
         println!("     id     |               name               |      status      ");
 
-        let stories: Vec<(&u32, &Story)> = db_state
+        let _ = db_state
             .stories
             .iter()
-            .sorted_by(|a, b| Ord::cmp(a.0, b.0))
-            .collect();
-
-        for story in stories {
-            println!(
-                "{}|{}|{}",
-                get_column_string(&story.0.to_string(), 12),
-                get_column_string(&story.1.name, 34),
-                get_column_string(&story.1.description, 18),
-            );
-        }
+            .sorted_by_key(|(id, _)| *id)
+            .map(|(id, story)| {
+                println!(
+                    "{}|{}|{}",
+                    get_column_string(&id.to_string(), 12),
+                    get_column_string(&story.name, 34),
+                    get_column_string(&story.description, 18),
+                );
+            });
 
         println!();
         println!();
@@ -178,8 +172,11 @@ impl Page for EpicDetail {
                 opt => match opt.parse::<u32>() {
                     Ok(story_id) => {
                         if let Ok(state) = self.db.read_db() {
-                            if state.stories.contains_key(&story_id) {
-                                return Ok(Some(Action::NavigateToStoryDetail { epic_id: self.epic_id, story_id}));
+                            if state.stories.contains_key(&StoryId(story_id)) {
+                                return Ok(Some(Action::NavigateToStoryDetail {
+                                    epic_id: self.epic_id,
+                                    story_id: StoryId(story_id),
+                                }));
                             } else {
                                 // Invalid epic id
                                 return Ok(None);
@@ -201,8 +198,8 @@ impl Page for EpicDetail {
 }
 
 pub struct StoryDetail {
-    pub epic_id: u32,
-    pub story_id: u32,
+    pub epic_id: EpicId,
+    pub story_id: StoryId,
     pub db: Rc<JiraDatabase>,
 }
 
@@ -319,7 +316,7 @@ mod tests {
             assert_eq!(page.handle_input(c).unwrap(), Some(Action::CreateEpic));
             assert_eq!(
                 page.handle_input(&valid_epic_id).unwrap(),
-                Some(Action::NavigateToEpicDetail { epic_id: 1 })
+                Some(Action::NavigateToEpicDetail { epic_id: EpicId(1) })
             );
             assert_eq!(page.handle_input(invalid_epic_id).unwrap(), None);
             assert_eq!(page.handle_input(junk_input).unwrap(), None);
@@ -369,7 +366,7 @@ mod tests {
                 database: Box::new(MockDB::new()),
             });
 
-            let page = EpicDetail { epic_id: 999, db };
+            let page = EpicDetail { epic_id: EpicId(999), db };
             assert_eq!(page.draw_page().is_err(), true);
         }
 
@@ -403,21 +400,21 @@ mod tests {
             );
             assert_eq!(
                 page.handle_input(u).unwrap(),
-                Some(Action::UpdateEpicStatus { epic_id: 1 })
+                Some(Action::UpdateEpicStatus { epic_id: EpicId(1) })
             );
             assert_eq!(
                 page.handle_input(d).unwrap(),
-                Some(Action::DeleteEpic { epic_id: 1 })
+                Some(Action::DeleteEpic { epic_id: EpicId(1) })
             );
             assert_eq!(
                 page.handle_input(c).unwrap(),
-                Some(Action::CreateStory { epic_id: 1 })
+                Some(Action::CreateStory { epic_id: EpicId(1) })
             );
             assert_eq!(
                 page.handle_input(&story_id.to_string()).unwrap(),
                 Some(Action::NavigateToStoryDetail {
-                    epic_id: 1,
-                    story_id: 2
+                    epic_id: EpicId(1),
+                    story_id: StoryId(2)
                 })
             );
             assert_eq!(page.handle_input(invalid_story_id).unwrap(), None);
@@ -493,7 +490,7 @@ mod tests {
 
             let page = StoryDetail {
                 epic_id,
-                story_id: 999,
+                story_id: StoryId(999),
                 db,
             };
             assert_eq!(page.draw_page().is_err(), true);

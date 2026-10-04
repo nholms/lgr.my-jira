@@ -1,4 +1,4 @@
-use crate::models::{DBState, Epic, Status, Story};
+use crate::models::{DBState, Epic, EpicId, Status, Story, StoryId};
 use anyhow::{anyhow, Result};
 use std::result::Result::Ok; // Was getting anyhow::Ok ??
 use std::{collections::hash_map::Entry, fs};
@@ -23,29 +23,29 @@ impl JiraDatabase {
         }
     }
 
-    pub fn create_epic(&self, epic: Epic) -> Result<u32> {
+    pub fn create_epic(&self, epic: Epic) -> Result<EpicId> {
         // Get the state we're working with.
         let mut state = self.database.read_db()?;
         // Retrieve from last_id
-        let next_id = state.last_item_id + 1;
+        let next_epic = EpicId(state.last_item_id + 1);
         // Use entry API
-        state.epics.entry(next_id).or_insert(epic);
+        state.epics.entry(next_epic).or_insert(epic);
         // Set last_id
-        state.last_item_id = next_id;
+        state.last_item_id = next_epic.0;
         // Save
         self.database.write_db(&state)?;
 
-        return Ok(next_id);
+        return Ok(next_epic);
     }
 
-    pub fn create_story(&self, story: Story, epic_id: u32) -> Result<u32> {
+    pub fn create_story(&self, story: Story, epic_id: EpicId) -> Result<StoryId> {
         // Similar to Epic
         let mut state = self.database.read_db()?;
-        let next_id = state.last_item_id + 1;
+        let next_story = StoryId(state.last_item_id + 1);
 
         // Use entry API
-        state.stories.entry(next_id).or_insert(story);
-        state.last_item_id = next_id;
+        state.stories.entry(next_story).or_insert(story);
+        state.last_item_id = next_story.0;
 
         // Add story to epic:
         // Guard the epic with entry API match
@@ -53,18 +53,18 @@ impl JiraDatabase {
             Entry::Occupied(mut occ) => {
                 let edit = occ.get_mut();
                 // Push new story id
-                edit.stories.push(next_id);
+                edit.stories.push(next_story);
                 // Save as last_item
-                state.last_item_id = next_id;
+                state.last_item_id = next_story.0;
                 // Save
                 self.database.write_db(&state)?;
-                Ok(next_id)
+                Ok(next_story)
             }
             Entry::Vacant(_) => Err(anyhow!("Epic doesn't exist...")),
         }
     }
 
-    pub fn delete_epic(&self, epic_id: u32) -> Result<()> {
+    pub fn delete_epic(&self, epic_id: EpicId) -> Result<()> {
         let mut state = self.database.read_db()?;
 
         // Get epic
@@ -83,7 +83,7 @@ impl JiraDatabase {
         }
     }
 
-    pub fn delete_story(&self, epic_id: u32, story_id: u32) -> Result<()> {
+    pub fn delete_story(&self, epic_id: EpicId, story_id: StoryId) -> Result<()> {
         let mut state = self.database.read_db()?;
 
         // Eval epic first
@@ -109,7 +109,7 @@ impl JiraDatabase {
         }
     }
 
-    pub fn update_epic_status(&self, epic_id: u32, status: Status) -> Result<()> {
+    pub fn update_epic_status(&self, epic_id: EpicId, status: Status) -> Result<()> {
         let mut state = self.database.read_db()?;
         match state.epics.entry(epic_id) {
             Entry::Vacant(_) => Err(anyhow!("No epic with id: {epic_id}")),
@@ -122,7 +122,7 @@ impl JiraDatabase {
         }
     }
 
-    pub fn update_story_status(&self, story_id: u32, status: Status) -> Result<()> {
+    pub fn update_story_status(&self, story_id: StoryId, status: Status) -> Result<()> {
         let mut state = self.database.read_db()?;
         match state.stories.entry(story_id) {
             Entry::Vacant(_) => Err(anyhow!("No story with id: {story_id}")),
@@ -212,10 +212,10 @@ mod tests {
         let id = result.unwrap();
         let db_state = db.read_db().unwrap();
 
-        let expected_id = 1;
+        let expected_id = EpicId(1);
 
         assert_eq!(id, expected_id);
-        assert_eq!(db_state.last_item_id, expected_id);
+        assert_eq!(db_state.last_item_id, expected_id.0);
         assert_eq!(db_state.epics.get(&id), Some(&epic));
     }
 
@@ -226,7 +226,7 @@ mod tests {
         };
         let story = Story::new("".to_owned(), "".to_owned());
 
-        let non_existent_epic_id = 999;
+        let non_existent_epic_id = EpicId(999);
 
         let result = db.create_story(story, non_existent_epic_id);
         assert_eq!(result.is_err(), true);
@@ -251,10 +251,10 @@ mod tests {
         let id = result.unwrap();
         let db_state = db.read_db().unwrap();
 
-        let expected_id = 2;
+        let expected_id = StoryId(2);
 
         assert_eq!(id, expected_id);
-        assert_eq!(db_state.last_item_id, expected_id);
+        assert_eq!(db_state.last_item_id, expected_id.0);
         assert_eq!(
             db_state.epics.get(&epic_id).unwrap().stories.contains(&id),
             true
@@ -268,7 +268,7 @@ mod tests {
             database: Box::new(MockDB::new()),
         };
 
-        let non_existent_epic_id = 999;
+        let non_existent_epic_id = EpicId(999);
 
         let result = db.delete_epic(non_existent_epic_id);
         assert_eq!(result.is_err(), true);
@@ -322,7 +322,7 @@ mod tests {
 
         let story_id = result.unwrap();
 
-        let non_existent_epic_id = 999;
+        let non_existent_epic_id = EpicId(999);
 
         let result = db.delete_story(non_existent_epic_id, story_id);
         assert_eq!(result.is_err(), true);
@@ -344,7 +344,7 @@ mod tests {
         let result = db.create_story(story, epic_id);
         assert_eq!(result.is_ok(), true);
 
-        let non_existent_story_id = 999;
+        let non_existent_story_id = StoryId(999);
 
         let result = db.delete_story(epic_id, non_existent_story_id);
         assert_eq!(result.is_err(), true);
@@ -394,7 +394,7 @@ mod tests {
             database: Box::new(MockDB::new()),
         };
 
-        let non_existent_epic_id = 999;
+        let non_existent_epic_id = EpicId(999);
 
         let result = db.update_epic_status(non_existent_epic_id, Status::Closed);
         assert_eq!(result.is_err(), true);
@@ -428,7 +428,7 @@ mod tests {
             database: Box::new(MockDB::new()),
         };
 
-        let non_existent_story_id = 999;
+        let non_existent_story_id = StoryId(999);
 
         let result = db.update_story_status(non_existent_story_id, Status::Closed);
         assert_eq!(result.is_err(), true);
@@ -540,14 +540,14 @@ mod tests {
                 name: "epic 1".to_owned(),
                 description: "epic 1".to_owned(),
                 status: Status::Open,
-                stories: vec![2],
+                stories: vec![StoryId(2)],
             };
 
             let mut stories = HashMap::new();
-            stories.insert(2, story);
+            stories.insert(StoryId(2), story);
 
             let mut epics = HashMap::new();
-            epics.insert(1, epic);
+            epics.insert(EpicId(1), epic);
 
             let state = DBState {
                 last_item_id: 2,
